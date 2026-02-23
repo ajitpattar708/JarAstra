@@ -86,7 +86,7 @@ JarAstra provides two primary goals:
 # Apply remediation
 mvn jarastra:remediate -U
 
-# Simulate remediation
+# Simulate remediation (Dry Run)
 mvn jarastra:remediate -Djarastra.dryRun=true
 
 ### Advanced Remediation Controls
@@ -97,7 +97,31 @@ In some cases, you may want to apply structural changes (like Spring Boot 4 migr
 
 ---
 
-## 4. Understanding the Remediation Report
+## 4. Gradle Integration
+JarAstra provides professional-grade support for Gradle projects (both Groovy and Kotlin DSL).
+
+### Way A: Using the CLI (Recommended)
+The JarAstra CLI automatically detects `build.gradle` or `build.gradle.kts` files and applies the `GradleBuildBridge`.
+
+```bash
+# Analyze and Upgrade a Gradle project
+java -jar libs/core-engine-1.0.0.jar /path/to/gradle-project --upgrade
+```
+
+### Way B: Maven Cross-Build Bridge
+A unique feature of JarAstra is the ability to remediate Gradle projects using the Maven Plugin. This is useful in hybrid environments where you want a unified command set.
+
+1.  Navigate to your Gradle project directory.
+2.  Run the Maven command (ensure you have the `com.jarastra.remediation` pluginGroup in `settings.xml` as shown in the Maven section):
+```bash
+mvn jarastra:remediate
+```
+- **Detection**: The plugin will see the absence of `pom.xml` and the presence of Gradle files, automatically switching to the **Gradle Intelligence Engine**.
+- **Transformation**: JarAstra will modify the `dependencies` blocks in your `.gradle` files using regex-based surgical insertion.
+
+---
+
+## 5. Understanding the Remediation Report
 After every `--upgrade` or `remediate` run, JarAstra generates `jarastra-remediation-report.md`.
 
 -   **CVE Resolution**: Maps every version change back to the specific security advisory.
@@ -127,3 +151,5 @@ maven.repositories=central|https://repo1.maven.org/maven2/,nexus|https://mynexus
 ---
 
 **Advanced Tip**: Use the `--offline` flag to skip CVE database updates if you have already synced the local cache.
+
+**Framework Note**: JarAstra's Gradle support is fully compatible with both **Groovy DSL** (`build.gradle`) and **Kotlin DSL** (`build.gradle.kts`).
