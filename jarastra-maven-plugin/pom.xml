@@ -18,9 +18,8 @@
             <groupId>com.jarastra.remediation</groupId>
             <artifactId>core-engine</artifactId>
             <version>${project.version}</version>
-            <scope>compile</scope>
         </dependency>
-        
+
         <!-- Explicitly include engine dependencies in the plugin realm -->
         <dependency>
             <groupId>org.ow2.asm</groupId>
@@ -133,24 +132,4 @@
             </plugin>
         </plugins>
     </build>
-
-    <profiles>
-        <profile>
-            <id>use-protected-jar</id>
-            <activation>
-                <file>
-                    <missing>${basedir}/../core-engine/src/main/java</missing>
-                </file>
-            </activation>
-            <dependencies>
-                <dependency>
-                    <groupId>com.jarastra.remediation</groupId>
-                    <artifactId>core-engine</artifactId>
-                    <version>${project.version}</version>
-                    <scope>system</scope>
-                    <systemPath>${basedir}/../libs/core-engine-1.0.0.jar</systemPath>
-                </dependency>
-            </dependencies>
-        </profile>
-    </profiles>
 </project>

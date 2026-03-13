@@ -34,8 +34,11 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.regex.Pattern;
 
 @Mojo(name = "remediate", requiresDependencyResolution = ResolutionScope.COMPILE)
 public class RemediateMojo extends AbstractJarAstraMojo {
@@ -43,6 +46,8 @@ public class RemediateMojo extends AbstractJarAstraMojo {
     private static final String ANSI_RED = "\u001B[31m";
     private static final String ANSI_BOLD = "\u001B[1m";
     private static final String ANSI_RESET = "\u001B[0m";
+    private static final Pattern MULTI_SPACE = Pattern.compile("\\s{2,}");
+    private static final Pattern SPACE_BEFORE_PUNCT = Pattern.compile("\\s+([,.)])");
 
     @Parameter(property = "jarastra.output", defaultValue = "${project.basedir}/upgraded")
     private File outputDirectory;
@@ -208,7 +213,7 @@ public class RemediateMojo extends AbstractJarAstraMojo {
                     if (resolution == null || resolution.getVersion() == null) continue;
 
                     String safeVersion = resolution.getVersion();
-                    String advice = resolution.getAdvice();
+                    String advice = sanitizeAdvice(resolution.getAdvice(), root, plan.getNode());
                     String minJdk = resolution.getMinJdk();
                     boolean breaking = resolution.isBreaking();
                     
@@ -406,6 +411,73 @@ public class RemediateMojo extends AbstractJarAstraMojo {
             }
         }
         return false;
+    }
+
+    String sanitizeAdvice(String advice, DependencyNode root, DependencyNode node) {
+        if (advice == null || advice.isBlank()) {
+            return advice;
+        }
+
+        Set<String> allowedEcosystems = detectAllowedEcosystems(root, node);
+        String sanitized = advice;
+
+        sanitized = removeForeignFrameworkFragment(sanitized, "helidon", "Helidon", allowedEcosystems);
+        sanitized = removeForeignFrameworkFragment(sanitized, "micronaut", "Micronaut", allowedEcosystems);
+        sanitized = removeForeignFrameworkFragment(sanitized, "quarkus", "Quarkus", allowedEcosystems);
+        sanitized = removeForeignFrameworkFragment(sanitized, "spring", "Spring(?: Boot| Cloud Gateway| Cloud)?", allowedEcosystems);
+
+        sanitized = MULTI_SPACE.matcher(sanitized).replaceAll(" ").trim();
+        sanitized = SPACE_BEFORE_PUNCT.matcher(sanitized).replaceAll("$1");
+        sanitized = sanitized.replace(" ,", ",").replace(" .", ".");
+        sanitized = sanitized.replace("Upgrade to and ", "Upgrade to ");
+        sanitized = sanitized.replace(", and ", " and ");
+        sanitized = sanitized.replace("and, ", "and ");
+        sanitized = sanitized.trim();
+
+        return sanitized.isBlank() ? advice : sanitized;
+    }
+
+    private Set<String> detectAllowedEcosystems(DependencyNode root, DependencyNode node) {
+        Set<String> allowed = new LinkedHashSet<>();
+        addDetectedEcosystem(allowed, root);
+        addDetectedEcosystem(allowed, node);
+        return allowed;
+    }
+
+    private void addDetectedEcosystem(Set<String> allowed, DependencyNode node) {
+        if (node == null) {
+            return;
+        }
+
+        String framework = safeLower(node.getFramework());
+        String groupId = safeLower(node.getGroupId());
+        String artifactId = safeLower(node.getArtifactId());
+
+        if (framework.contains("spring") || groupId.startsWith("org.springframework")) {
+            allowed.add("spring");
+        }
+        if (framework.contains("helidon") || groupId.startsWith("io.helidon") || artifactId.contains("helidon")) {
+            allowed.add("helidon");
+        }
+        if (framework.contains("micronaut") || groupId.startsWith("io.micronaut") || artifactId.contains("micronaut")) {
+            allowed.add("micronaut");
+        }
+        if (framework.contains("quarkus") || groupId.startsWith("io.quarkus") || artifactId.contains("quarkus")) {
+            allowed.add("quarkus");
+        }
+    }
+
+    private String removeForeignFrameworkFragment(String advice, String ecosystemKey, String frameworkRegex, Set<String> allowedEcosystems) {
+        if (allowedEcosystems.contains(ecosystemKey)) {
+            return advice;
+        }
+
+        String pattern = "(?i)(?:,?\\s*and\\s+|,?\\s*)(" + frameworkRegex + ")\\s+\\d+(?:\\.\\d+)*(?:[-A-Za-z0-9.]+)?";
+        return advice.replaceAll(pattern, "");
+    }
+
+    private String safeLower(String value) {
+        return value == null ? "" : value.toLowerCase();
     }
 
     private void copyDirectory(Path source, Path target) throws Exception {
